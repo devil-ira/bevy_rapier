@@ -27,26 +27,40 @@ pub use rapier::parry;
 /// on the dimension used by the engine.
 #[cfg(feature = "dim2")]
 pub mod math {
-    use bevy::math::Vec2;
+    use bevy::{
+        math::Vec2,
+        transform::components::{GlobalTransform2d, Transform2d},
+    };
     /// The real type (f32 or f64).
     pub type Real = rapier::math::Real;
     /// The vector type.
     pub type Vect = Vec2;
     /// The rotation type (in 2D this is an angle in radians).
     pub type Rot = Real;
+    /// The transform type.
+    pub type Trs = Transform2d;
+    /// The computed transform type.
+    pub type ComputedTrs = GlobalTransform2d;
 }
 
 /// Type aliases to select the right vector/rotation types based
 /// on the dimension used by the engine.
 #[cfg(feature = "dim3")]
 pub mod math {
-    use bevy::math::{Quat, Vec3};
+    use bevy::{
+        math::{Quat, Vec3},
+        transform::components::{GlobalTransform, Transform},
+    };
     /// The real type (f32 or f64).
     pub type Real = rapier::math::Real;
     /// The vector type.
     pub type Vect = Vec3;
     /// The rotation type.
     pub type Rot = Quat;
+    /// The transform type.
+    pub type Trs = Transform;
+    /// The computed transform type.
+    pub type ComputedTrs = GlobalTransform;
 }
 
 /// Components related to physics dynamics (rigid-bodies, velocities, etc.)

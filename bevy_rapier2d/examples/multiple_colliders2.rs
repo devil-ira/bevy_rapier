@@ -27,7 +27,7 @@ pub fn setup_physics(mut commands: Commands) {
     let ground_height = 1.0;
 
     commands.spawn((
-        TransformBundle::from(Transform::from_xyz(0.0, -ground_height, 0.0)),
+        Transform2dBundle::from(Transform2d::from_xy(0.0, -ground_height)),
         Collider::cuboid(ground_size, ground_height),
     ));
 
@@ -50,17 +50,17 @@ pub fn setup_physics(mut commands: Commands) {
 
             commands
                 .spawn((
-                    TransformBundle::from(Transform::from_xyz(x, y, 0.0)),
+                    Transform2dBundle::from(Transform2d::from_xy(x, y)),
                     RigidBody::Dynamic,
                 ))
                 .with_children(|children| {
                     children.spawn(Collider::cuboid(rad * 10.0, rad));
                     children.spawn((
-                        TransformBundle::from(Transform::from_xyz(rad * 10.0, rad * 10.0, 0.0)),
+                        Transform2dBundle::from(Transform2d::from_xy(rad * 10.0, rad * 10.0)),
                         Collider::cuboid(rad, rad * 10.0),
                     ));
                     children.spawn((
-                        TransformBundle::from(Transform::from_xyz(-rad * 10.0, rad * 10.0, 0.0)),
+                        Transform2dBundle::from(Transform2d::from_xy(-rad * 10.0, rad * 10.0)),
                         Collider::cuboid(rad, rad * 10.0),
                     ));
                 });

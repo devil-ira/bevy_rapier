@@ -24,7 +24,7 @@ fn main() {
 
 fn setup_graphics(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
-        transform: Transform::from_xyz(0.0, -200.0, 0.0),
+        transform: Transform2d::from_xy(0.0, -200.0),
         ..default()
     });
 }
@@ -51,7 +51,7 @@ pub fn setup_physics(mut commands: Commands, mut despawn: ResMut<DespawnResource
 
             let child_entity = commands
                 .spawn((
-                    TransformBundle::from(Transform::from_xyz(fk * shift, -fi * shift, 0.0)),
+                    Transform2dBundle::from(Transform2d::from_xy(fk * shift, -fi * shift)),
                     rigid_body,
                     Collider::cuboid(rad, rad),
                 ))

@@ -17,7 +17,7 @@ fn main() {
 
 fn setup_graphics(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
-        transform: Transform::from_xyz(0.0, 200.0, 0.0),
+        transform: Transform2d::from_xy(0.0, 200.0),
         ..default()
     });
 }
@@ -30,7 +30,7 @@ pub fn setup_physics(mut commands: Commands) {
     let ground_height = 10.0;
 
     commands.spawn((
-        TransformBundle::from(Transform::from_xyz(0.0, -ground_height, 0.0)),
+        Transform2dBundle::from(Transform2d::from_xy(0.0, -ground_height)),
         Collider::cuboid(ground_size, ground_height),
     ));
 
@@ -38,7 +38,7 @@ pub fn setup_physics(mut commands: Commands) {
      * A rectangle that only rotate.
      */
     commands.spawn((
-        TransformBundle::from(Transform::from_xyz(0.0, 300.0, 0.0)),
+        Transform2dBundle::from(Transform2d::from_xy(0.0, 300.0)),
         RigidBody::Dynamic,
         LockedAxes::TRANSLATION_LOCKED,
         Collider::cuboid(200.0, 60.0),
@@ -48,9 +48,7 @@ pub fn setup_physics(mut commands: Commands) {
      * A tilted cuboid that cannot rotate.
      */
     commands.spawn((
-        TransformBundle::from(
-            Transform::from_xyz(50.0, 500.0, 0.0).with_rotation(Quat::from_rotation_z(1.0)),
-        ),
+        Transform2dBundle::from(Transform2d::from_xy(50.0, 500.0).with_rotation(1.0)),
         RigidBody::Dynamic,
         LockedAxes::ROTATION_LOCKED,
         Collider::cuboid(60.0, 40.0),

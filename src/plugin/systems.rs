@@ -1,16 +1,5 @@
 //! Systems responsible for interfacing our Bevy components with the Rapier physics engine.
 
-use crate::dynamics::{
-    AdditionalMassProperties, Ccd, Damping, Dominance, ExternalForce, ExternalImpulse,
-    GravityScale, ImpulseJoint, LockedAxes, MassProperties, MultibodyJoint,
-    RapierImpulseJointHandle, RapierMultibodyJointHandle, RapierRigidBodyHandle,
-    ReadMassProperties, RigidBody, Sleeping, TransformInterpolation, Velocity,
-};
-use crate::geometry::{
-    ActiveCollisionTypes, ActiveEvents, ActiveHooks, Collider, ColliderDisabled,
-    ColliderMassProperties, ColliderScale, CollisionGroups, ContactForceEventThreshold, Friction,
-    RapierColliderHandle, Restitution, Sensor, SolverGroups,
-};
 use crate::pipeline::{CollisionEvent, ContactForceEvent};
 use crate::plugin::configuration::{SimulationToRenderTime, TimestepMode};
 use crate::plugin::{RapierConfiguration, RapierContext};
@@ -19,6 +8,23 @@ use crate::prelude::{
     KinematicCharacterControllerOutput, RigidBodyDisabled,
 };
 use crate::utils;
+use crate::{
+    dynamics::{
+        AdditionalMassProperties, Ccd, Damping, Dominance, ExternalForce, ExternalImpulse,
+        GravityScale, ImpulseJoint, LockedAxes, MassProperties, MultibodyJoint,
+        RapierImpulseJointHandle, RapierMultibodyJointHandle, RapierRigidBodyHandle,
+        ReadMassProperties, RigidBody, Sleeping, TransformInterpolation, Velocity,
+    },
+    prelude::ComputedTrs,
+};
+use crate::{
+    geometry::{
+        ActiveCollisionTypes, ActiveEvents, ActiveHooks, Collider, ColliderDisabled,
+        ColliderMassProperties, ColliderScale, CollisionGroups, ContactForceEventThreshold,
+        Friction, RapierColliderHandle, Restitution, Sensor, SolverGroups,
+    },
+    prelude::Trs,
+};
 use bevy::ecs::system::{StaticSystemParam, SystemParamItem};
 use bevy::prelude::*;
 use rapier::prelude::*;
@@ -31,14 +37,12 @@ use {
 };
 
 use crate::control::CharacterCollision;
-#[cfg(feature = "dim2")]
-use bevy::math::Vec3Swizzles;
 
 /// Components that will be updated after a physics step.
 pub type RigidBodyWritebackComponents<'a> = (
     Entity,
     Option<&'a Parent>,
-    Option<&'a mut Transform>,
+    Option<&'a mut Trs>,
     Option<&'a mut TransformInterpolation>,
     Option<&'a mut Velocity>,
     Option<&'a mut Sleeping>,
@@ -48,7 +52,7 @@ pub type RigidBodyWritebackComponents<'a> = (
 pub type RigidBodyComponents<'a> = (
     Entity,
     &'a RigidBody,
-    Option<&'a GlobalTransform>,
+    Option<&'a ComputedTrs>,
     Option<&'a Velocity>,
     Option<&'a AdditionalMassProperties>,
     Option<&'a ReadMassProperties>,
@@ -79,15 +83,15 @@ pub type ColliderComponents<'a> = (
     Option<&'a ColliderDisabled>,
 );
 
-/// System responsible for applying [`GlobalTransform::scale`] and/or [`ColliderScale`] to
+/// System responsible for applying [`ComputedTrs::scale`] and/or [`ColliderScale`] to
 /// colliders.
 pub fn apply_scale(
     config: Res<RapierConfiguration>,
     mut changed_collider_scales: Query<
-        (&mut Collider, &GlobalTransform, Option<&ColliderScale>),
+        (&mut Collider, &ComputedTrs, Option<&ColliderScale>),
         Or<(
             Changed<Collider>,
-            Changed<GlobalTransform>,
+            Changed<ComputedTrs>,
             Changed<ColliderScale>,
         )>,
     >,
@@ -99,10 +103,8 @@ pub fn apply_scale(
         #[cfg(feature = "dim2")]
         let effective_scale = match custom_scale {
             Some(ColliderScale::Absolute(scale)) => *scale,
-            Some(ColliderScale::Relative(scale)) => {
-                *scale * transform.compute_transform().scale.xy()
-            }
-            None => transform.compute_transform().scale.xy(),
+            Some(ColliderScale::Relative(scale)) => *scale * transform.compute_transform().scale,
+            None => transform.compute_transform().scale,
         };
         #[cfg(feature = "dim3")]
         let effective_scale = match custom_scale {
@@ -122,8 +124,8 @@ pub fn apply_collider_user_changes(
     config: Res<RapierConfiguration>,
     mut context: ResMut<RapierContext>,
     changed_collider_transforms: Query<
-        (&RapierColliderHandle, &GlobalTransform),
-        (Without<RapierRigidBodyHandle>, Changed<GlobalTransform>),
+        (&RapierColliderHandle, &ComputedTrs),
+        (Without<RapierRigidBodyHandle>, Changed<ComputedTrs>),
     >,
     changed_shapes: Query<(&RapierColliderHandle, &Collider), Changed<Collider>>,
     changed_active_events: Query<(&RapierColliderHandle, &ActiveEvents), Changed<ActiveEvents>>,
@@ -254,10 +256,10 @@ pub fn apply_rigid_body_user_changes(
     mut changed_transforms: Query<
         (
             &RapierRigidBodyHandle,
-            &GlobalTransform,
+            &ComputedTrs,
             Option<&mut TransformInterpolation>,
         ),
-        Changed<GlobalTransform>,
+        Changed<ComputedTrs>,
     >,
     changed_velocities: Query<(&RapierRigidBodyHandle, &Velocity), Changed<Velocity>>,
     changed_additional_mass_props: Query<
@@ -317,8 +319,8 @@ pub fn apply_rigid_body_user_changes(
     // system.
     let transform_changed =
         |handle: &RigidBodyHandle,
-         transform: &GlobalTransform,
-         last_transform_set: &HashMap<RigidBodyHandle, GlobalTransform>| {
+         transform: &ComputedTrs,
+         last_transform_set: &HashMap<RigidBodyHandle, ComputedTrs>| {
             if config.force_update_from_transform_changes {
                 true
             } else if let Some(prev) = last_transform_set.get(handle) {
@@ -483,12 +485,12 @@ pub fn apply_joint_user_changes(
 }
 
 /// System responsible for writing the result of the last simulation step into our `bevy_rapier`
-/// components and the [`GlobalTransform`] component.
+/// components and the [`ComputedTrs`] component.
 pub fn writeback_rigid_bodies(
     mut context: ResMut<RapierContext>,
     config: Res<RapierConfiguration>,
     sim_to_render_time: Res<SimulationToRenderTime>,
-    global_transforms: Query<&GlobalTransform>,
+    global_transforms: Query<&ComputedTrs>,
     mut writeback: Query<RigidBodyWritebackComponents>,
 ) {
     let context = &mut *context;
@@ -532,53 +534,71 @@ pub fn writeback_rigid_bodies(
                         if let Some(parent_global_transform) =
                             parent.and_then(|p| global_transforms.get(**p).ok())
                         {
-                            // We need to compute the new local transform such that:
-                            // curr_parent_global_transform * new_transform = interpolated_pos
-                            // new_transform = curr_parent_global_transform.inverse() * interpolated_pos
-                            let (_, inverse_parent_rotation, inverse_parent_translation) =
-                                parent_global_transform
-                                    .affine()
-                                    .inverse()
-                                    .to_scale_rotation_translation();
-                            let new_rotation = inverse_parent_rotation * interpolated_pos.rotation;
+                            #[cfg(feature = "dim3")]
+                            {
+                                // We need to compute the new local transform such that:
+                                // curr_parent_global_transform * new_transform = interpolated_pos
+                                // new_transform = curr_parent_global_transform.inverse() * interpolated_pos
+                                let (_, inverse_parent_rotation, inverse_parent_translation) =
+                                    parent_global_transform
+                                        .affine()
+                                        .inverse()
+                                        .to_scale_rotation_translation();
+                                let new_rotation =
+                                    inverse_parent_rotation * interpolated_pos.rotation;
 
-                            #[allow(unused_mut)] // mut is needed in 2D but not in 3D.
-                            let mut new_translation = inverse_parent_rotation
-                                * interpolated_pos.translation
-                                + inverse_parent_translation;
+                                let new_translation = inverse_parent_rotation
+                                    * interpolated_pos.translation
+                                    + inverse_parent_translation;
 
-                            // In 2D, preserve the transform `z` component that may have been set by the user
+                                if transform.rotation != new_rotation
+                                    || transform.translation != new_translation
+                                {
+                                    // NOTE: we write the new value only if there was an
+                                    //       actual change, in order to not trigger bevy’s
+                                    //       change tracking when the values didn’t change.
+                                    transform.rotation = new_rotation;
+                                    transform.translation = new_translation;
+                                }
+
+                                // NOTE: we need to compute the result of the next transform propagation
+                                //       to make sure that our change detection for transforms is exact
+                                //       despite rounding errors.
+                                let new_global_transform =
+                                    parent_global_transform.mul_transform(*transform);
+
+                                context
+                                    .last_body_transform_set
+                                    .insert(handle, new_global_transform);
+                            }
                             #[cfg(feature = "dim2")]
                             {
-                                new_translation.z = transform.translation.z;
+                                // We need to compute the new local transform such that:
+                                // curr_parent_global_transform * new_transform = interpolated_pos
+                                // new_transform = curr_parent_global_transform.inverse() * interpolated_pos
+                                let Transform2d {
+                                    translation: parent_translation,
+                                    rotation: parent_rotation,
+                                    ..
+                                } = parent_global_transform.compute_transform();
+
+                                let new_rotation = -parent_rotation + interpolated_pos.rotation;
+
+                                let new_translation = Mat2::from_angle(-parent_rotation)
+                                    * interpolated_pos.translation
+                                    - parent_translation;
+
+                                if transform.rotation != new_rotation
+                                    || transform.translation != new_translation
+                                {
+                                    // NOTE: we write the new value only if there was an
+                                    //       actual change, in order to not trigger bevy’s
+                                    //       change tracking when the values didn’t change.
+                                    transform.rotation = new_rotation;
+                                    transform.translation = new_translation;
+                                }
                             }
-
-                            if transform.rotation != new_rotation
-                                || transform.translation != new_translation
-                            {
-                                // NOTE: we write the new value only if there was an
-                                //       actual change, in order to not trigger bevy’s
-                                //       change tracking when the values didn’t change.
-                                transform.rotation = new_rotation;
-                                transform.translation = new_translation;
-                            }
-
-                            // NOTE: we need to compute the result of the next transform propagation
-                            //       to make sure that our change detection for transforms is exact
-                            //       despite rounding errors.
-                            let new_global_transform =
-                                parent_global_transform.mul_transform(*transform);
-
-                            context
-                                .last_body_transform_set
-                                .insert(handle, new_global_transform);
                         } else {
-                            // In 2D, preserve the transform `z` component that may have been set by the user
-                            #[cfg(feature = "dim2")]
-                            {
-                                interpolated_pos.translation.z = transform.translation.z;
-                            }
-
                             if transform.rotation != interpolated_pos.rotation
                                 || transform.translation != interpolated_pos.translation
                             {
@@ -591,7 +611,7 @@ pub fn writeback_rigid_bodies(
 
                             context
                                 .last_body_transform_set
-                                .insert(handle, GlobalTransform::from(interpolated_pos));
+                                .insert(handle, ComputedTrs::from(interpolated_pos));
                         }
                     }
 
@@ -741,9 +761,9 @@ pub fn init_colliders(
     mut commands: Commands,
     config: Res<RapierConfiguration>,
     mut context: ResMut<RapierContext>,
-    colliders: Query<(ColliderComponents, Option<&GlobalTransform>), Without<RapierColliderHandle>>,
+    colliders: Query<(ColliderComponents, Option<&ComputedTrs>), Without<RapierColliderHandle>>,
     mut rigid_body_mprops: Query<&mut ReadMassProperties>,
-    parent_query: Query<(&Parent, Option<&Transform>)>,
+    parent_query: Query<(&Parent, Option<&Trs>)>,
 ) {
     let context = &mut *context;
     let physics_scale = context.physics_scale;
@@ -822,7 +842,7 @@ pub fn init_colliders(
 
         let mut body_entity = entity;
         let mut body_handle = context.entity2body.get(&body_entity).copied();
-        let mut child_transform = Transform::default();
+        let mut child_transform = Trs::default();
         while body_handle.is_none() {
             if let Ok((parent_entity, transform)) = parent_query.get(body_entity) {
                 if let Some(transform) = transform {
@@ -1251,9 +1271,9 @@ pub fn update_character_controls(
         Option<&mut KinematicCharacterControllerOutput>,
         Option<&RapierColliderHandle>,
         Option<&RapierRigidBodyHandle>,
-        Option<&GlobalTransform>,
+        Option<&ComputedTrs>,
     )>,
-    mut transforms: Query<&mut Transform>,
+    mut transforms: Query<&mut Trs>,
 ) {
     let physics_scale = context.physics_scale;
     let context = &mut *context;
@@ -1364,7 +1384,7 @@ pub fn update_character_controls(
             }
 
             if let Ok(mut transform) = transforms.get_mut(entity_to_move) {
-                // TODO: take the parent’s GlobalTransform rotation into account?
+                // TODO: take the parent’s ComputedTrs rotation into account?
                 transform.translation.x += movement.translation.x * physics_scale;
                 transform.translation.y += movement.translation.y * physics_scale;
                 #[cfg(feature = "dim3")]
@@ -1579,6 +1599,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "dim3")]
     fn transform_propagation() {
         let mut app = App::new();
         app.add_plugin(HeadlessRenderPlugin)
@@ -1634,6 +1655,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "dim2")]
     fn transform_propagation2() {
         let mut app = App::new();
         app.add_plugin(HeadlessRenderPlugin)
@@ -1641,20 +1663,17 @@ mod tests {
             .add_plugin(TimePlugin)
             .add_plugin(RapierPhysicsPlugin::<NoUserData>::default());
 
-        let zero = (Transform::default(), Transform::default());
+        let zero = (Transform2d::default(), Transform2d::default());
 
         let different = (
-            Transform {
-                translation: Vec3::X * 10.0,
-                // NOTE: in 2D the test will fail if the rotation is wrt. an axis
-                //       other than Z because 2D physics objects can’t rotate wrt.
-                //       other axes.
-                rotation: Quat::from_rotation_z(PI),
+            Transform2d {
+                translation: Vec2::X * 10.0,
+                rotation: PI,
                 ..Default::default()
             },
-            Transform {
-                translation: Vec3::Y * 10.0,
-                rotation: Quat::from_rotation_z(PI),
+            Transform2d {
+                translation: Vec2::Y * 10.0,
+                rotation: PI,
                 ..Default::default()
             },
         );
@@ -1664,12 +1683,15 @@ mod tests {
         for (child_transform, parent_transform) in [zero, same, different] {
             let child = app
                 .world
-                .spawn((TransformBundle::from(child_transform), Collider::ball(1.0)))
+                .spawn((
+                    Transform2dBundle::from(child_transform),
+                    Collider::ball(1.0),
+                ))
                 .id();
 
             let parent = app
                 .world
-                .spawn((TransformBundle::from(parent_transform), RigidBody::Fixed))
+                .spawn((Transform2dBundle::from(parent_transform), RigidBody::Fixed))
                 .push_children(&[child])
                 .id();
 
@@ -1678,7 +1700,7 @@ mod tests {
             let child_transform = app
                 .world
                 .entity(child)
-                .get::<GlobalTransform>()
+                .get::<GlobalTransform2d>()
                 .unwrap()
                 .compute_transform();
             let context = app.world.resource::<RapierContext>();
@@ -1693,18 +1715,9 @@ mod tests {
                 child_transform.translation,
                 epsilon = 1.0e-5
             );
-
-            // Adjust signs to account for the quaternion’s double covering.
-            let comparison_child_rotation =
-                if body_transform.rotation.w * child_transform.rotation.w < 0.0 {
-                    -child_transform.rotation
-                } else {
-                    child_transform.rotation
-                };
-
             approx::assert_relative_eq!(
                 body_transform.rotation,
-                comparison_child_rotation,
+                child_transform.rotation,
                 epsilon = 1.0e-5
             );
             approx::assert_relative_eq!(body_transform.scale, child_transform.scale,);

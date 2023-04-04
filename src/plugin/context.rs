@@ -9,10 +9,13 @@ use rapier::prelude::{
     QueryFilter as RapierQueryFilter, QueryPipeline, Ray, Real, RigidBodyHandle, RigidBodySet,
 };
 
-use crate::geometry::{Collider, PointProjection, RayIntersection, Toi};
 use crate::math::{Rot, Vect};
 use crate::pipeline::{CollisionEvent, ContactForceEvent, EventQueue, QueryFilter};
-use bevy::prelude::{Entity, EventWriter, GlobalTransform, Query};
+use crate::{
+    geometry::{Collider, PointProjection, RayIntersection, Toi},
+    prelude::ComputedTrs,
+};
+use bevy::prelude::{Entity, EventWriter, Query};
 use bevy::render::primitives::Aabb;
 
 use crate::control::{CharacterCollision, MoveShapeOptions, MoveShapeOutput};
@@ -57,7 +60,7 @@ pub struct RapierContext {
     pub(crate) event_handler: Option<Box<dyn EventHandler>>,
     // For transform change detection.
     #[cfg_attr(feature = "serde-serialize", serde(skip))]
-    pub(crate) last_body_transform_set: HashMap<RigidBodyHandle, GlobalTransform>,
+    pub(crate) last_body_transform_set: HashMap<RigidBodyHandle, ComputedTrs>,
     // NOTE: these maps are needed to handle despawning.
     #[cfg_attr(feature = "serde-serialize", serde(skip))]
     pub(crate) entity2body: HashMap<Entity, RigidBodyHandle>,

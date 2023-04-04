@@ -2,7 +2,10 @@ use crate::pipeline::{CollisionEvent, ContactForceEvent};
 use crate::plugin::configuration::SimulationToRenderTime;
 use crate::plugin::{systems, RapierConfiguration, RapierContext};
 use crate::prelude::*;
-use bevy::ecs::{event::Events, schedule::SystemConfigs, system::SystemParamItem};
+use bevy::{
+    ecs::{event::Events, schedule::SystemConfigs, system::SystemParamItem},
+    transform::systems::{propagate_transforms, sync_simple_transforms},
+};
 use bevy::{prelude::*, transform::TransformSystem};
 use std::marker::PhantomData;
 
@@ -61,37 +64,49 @@ where
     /// See [`PhysicsSet`] for a description of these systems.
     pub fn get_systems(set: PhysicsSet) -> SystemConfigs {
         match set {
-            PhysicsSet::SyncBackend => (
-                // Run the character controller before the manual transform propagation.
-                systems::update_character_controls,
-                // Run Bevy transform propagation additionally to sync [`GlobalTransform`]
+            PhysicsSet::SyncBackend => {
                 (
-                    bevy::transform::systems::sync_simple_transforms,
-                    bevy::transform::systems::propagate_transforms,
+                    // Run the character controller before the manual transform propagation.
+                    systems::update_character_controls,
+                    // Run Bevy transform propagation additionally to sync [`ComputedTrs`]
+                    (
+                        #[cfg(feature = "dim3")]
+                        (
+                            sync_simple_transforms::<Trs, ComputedTrs>,
+                            propagate_transforms::<Trs, ComputedTrs>,
+                        )
+                            .chain(),
+                        #[cfg(feature = "dim2")]
+                        (
+                            sync_simple_transforms::<Transform2d, GlobalTransform2d>,
+                            propagate_transforms::<Transform2d, GlobalTransform2d>,
+                        )
+                            .chain(),
+                    )
+                        .after(systems::update_character_controls)
+                        .in_set(RapierTransformPropagateSet),
+                    systems::init_async_colliders.after(RapierTransformPropagateSet),
+                    systems::apply_scale.after(systems::init_async_colliders),
+                    systems::apply_collider_user_changes.after(systems::apply_scale),
+                    systems::apply_rigid_body_user_changes
+                        .after(systems::apply_collider_user_changes),
+                    systems::apply_joint_user_changes.after(systems::apply_rigid_body_user_changes),
+                    systems::init_rigid_bodies.after(systems::apply_joint_user_changes),
+                    systems::init_colliders
+                        .after(systems::init_rigid_bodies)
+                        .after(systems::init_async_colliders),
+                    systems::init_joints.after(systems::init_colliders),
+                    systems::apply_initial_rigid_body_impulses.after(systems::init_colliders),
+                    systems::sync_removals
+                        .after(systems::init_joints)
+                        .after(systems::apply_initial_rigid_body_impulses),
+                    #[cfg(all(feature = "dim3", feature = "async-collider"))]
+                    systems::init_async_scene_colliders
+                        .after(bevy::scene::scene_spawner_system)
+                        .before(systems::init_async_colliders),
                 )
-                    .chain()
-                    .after(systems::update_character_controls)
-                    .in_set(RapierTransformPropagateSet),
-                systems::init_async_colliders.after(RapierTransformPropagateSet),
-                systems::apply_scale.after(systems::init_async_colliders),
-                systems::apply_collider_user_changes.after(systems::apply_scale),
-                systems::apply_rigid_body_user_changes.after(systems::apply_collider_user_changes),
-                systems::apply_joint_user_changes.after(systems::apply_rigid_body_user_changes),
-                systems::init_rigid_bodies.after(systems::apply_joint_user_changes),
-                systems::init_colliders
-                    .after(systems::init_rigid_bodies)
-                    .after(systems::init_async_colliders),
-                systems::init_joints.after(systems::init_colliders),
-                systems::apply_initial_rigid_body_impulses.after(systems::init_colliders),
-                systems::sync_removals
-                    .after(systems::init_joints)
-                    .after(systems::apply_initial_rigid_body_impulses),
-                #[cfg(all(feature = "dim3", feature = "async-collider"))]
-                systems::init_async_scene_colliders
-                    .after(bevy::scene::scene_spawner_system)
-                    .before(systems::init_async_colliders),
-            )
-                .into_configs(),
+                    .into_configs()
+            }
             PhysicsSet::SyncBackendFlush => (apply_system_buffers,).into_configs(),
             PhysicsSet::StepSimulation => (
                 systems::step_simulation::<PhysicsHooks>,
@@ -142,7 +157,7 @@ pub enum PhysicsSet {
     /// The systems responsible for updating
     /// [`crate::geometry::collider::CollidingEntities`] and writing
     /// the result of the last simulation step into our `bevy_rapier`
-    /// components and the [`GlobalTransform`] component.
+    /// components and the [`ComputedTrs`] component.
     /// These systems typically run immediately after [`PhysicsSet::StepSimulation`].
     Writeback,
 }

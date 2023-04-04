@@ -88,13 +88,13 @@ impl fmt::Debug for Collider {
     }
 }
 
-/// Overwrites the default application of [`GlobalTransform::scale`] to collider shapes.
+/// Overwrites the default application of [`ComputedTrs::scale`] to collider shapes.
 #[derive(Copy, Clone, Debug, PartialEq, Component, Reflect, FromReflect)]
 pub enum ColliderScale {
-    /// This scale will be multiplied with the scale in the [`GlobalTransform`] component
+    /// This scale will be multiplied with the scale in the [`ComputedTrs`] component
     /// before being applied to the collider.
     Relative(Vect),
-    /// This scale will replace the one specified in the [`GlobalTransform`] component.
+    /// This scale will replace the one specified in the [`ComputedTrs`] component.
     Absolute(Vect),
 }
 
@@ -501,7 +501,7 @@ impl CollidingEntities {
 pub struct ColliderDisabled;
 
 /// We restrict the scaling increment to 1.0e-4, to avoid numerical jitter
-/// due to the extraction of scaling factor from the GlobalTransform matrix.
+/// due to the extraction of scaling factor from the ComputedTrs matrix.
 pub fn get_snapped_scale(scale: Vect) -> Vect {
     fn snap_value(new: f32) -> f32 {
         const PRECISION: f32 = 1.0e4;

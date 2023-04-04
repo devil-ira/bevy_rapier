@@ -133,7 +133,7 @@ fn setup_board(commands: &mut Commands, game: &Game) {
                 custom_size: Some(Vec2::new(game.n_lanes as f32 * 30.0, 60.0)),
                 ..Default::default()
             },
-            transform: Transform::from_xyz(0.0, floor_y - 30.0 * 0.5, 0.0),
+            transform: Transform2d::from_xy(0.0, floor_y - 30.0 * 0.5),
             ..Default::default()
         },
         RigidBody::Fixed,
@@ -203,7 +203,7 @@ fn spawn_block(
                     custom_size: Some(Vec2::new(30.0, 30.0)),
                     ..Default::default()
                 },
-                transform: Transform::from_xyz(x, y, 0.0),
+                transform: Transform2d::from_xy(x, y),
                 ..Default::default()
             },
             RigidBody::Dynamic,
