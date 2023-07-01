@@ -15,8 +15,8 @@ fn main() {
         )))
         .insert_resource(DespawnResource::default())
         .add_plugins(DefaultPlugins)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(Startup, (setup_graphics, setup_physics))
         .add_systems(Update, despawn)
         .run();

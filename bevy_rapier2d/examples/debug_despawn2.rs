@@ -12,8 +12,8 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup_game)
         .add_systems(Update, cube_sleep_detection)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
-        .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .add_plugins(RapierDebugRenderPlugin::default())
         .run();
 }
 
