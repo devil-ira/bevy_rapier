@@ -13,8 +13,8 @@ fn main() {
         }))
         .add_systems(Startup, spawn_player)
         .add_systems(Update, player_movement)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
-        .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .add_plugins(RapierDebugRenderPlugin::default())
         .run();
 }
 

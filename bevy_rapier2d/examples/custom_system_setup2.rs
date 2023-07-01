@@ -10,7 +10,7 @@ fn main() {
         0xFF as f32 / 255.0,
     )))
     .add_plugins(DefaultPlugins)
-    .add_plugin(RapierDebugRenderPlugin::default())
+    .add_plugins(RapierDebugRenderPlugin::default())
     .add_systems(Startup, (setup_graphics, setup_physics));
 
     app.configure_sets(
@@ -42,7 +42,7 @@ fn main() {
         ),
     );
 
-    app.add_plugin(
+    app.add_plugins(
         RapierPhysicsPlugin::<NoUserData>::default()
             .with_physics_scale(100.)
             .with_default_system_setup(false),

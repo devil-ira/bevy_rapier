@@ -36,10 +36,10 @@ fn main() {
             0xFF as f32 / 255.0,
         )))
         .add_plugins(DefaultPlugins)
-        .add_plugin(RapierPhysicsPlugin::<SameUserDataFilter>::pixels_per_meter(
+        .add_plugins(RapierPhysicsPlugin::<SameUserDataFilter>::pixels_per_meter(
             100.0,
         ))
-        .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(Startup, (setup_graphics, setup_physics))
         .run();
 }
